@@ -17,12 +17,46 @@ Your goal is to generate a natural, in-character conversation based on the provi
 The conversation should reflect the following scenarios:
 ${scenarios_list}
 
-**Instructions:**
-- The output must be in JSON format, each conversation should follow this structure: `{"scenarios":["label1","label2"],"dialogues":[{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}`
-- The 'scenarios' field is a list of labels that represent the scenarios that the conversation should reflect you should evaluate the conversation and assign the scenarios labels  in the 'scenarios' field. And labels must be in the same order as the scenarios in Scenarios Setup list.
-- Each conversation should have **${conversation_turns}** turns between the character and a user. One user question and one assistant response is one turn.
-- You should generate **${num_to_generate}** conversations.
-- The 'assistant' role represents the character.
-- The conversation should be engaging, coherent, and stay true to the character's persona and the given scenarios.
+**Output Format Requirements:**
+You must generate exactly **${num_to_generate}** conversations in a structured JSON format. Each conversation should:
 
-Begin generating the conversations now. 
+1. Include a "scenarios" field with relevant scenario labels from the Scenarios Setup
+2. Include a "dialogues" field with exactly **${conversation_turns}** dialogue turns
+3. Each dialogue turn has a "role" field ("user" or "assistant") and a "content" field
+4. The "assistant" role represents the character ${character_name}
+5. Conversations should be engaging, coherent, and stay true to the character's persona
+
+**Example Output Format:**
+Please generate the conversations following the structured format exactly. 
+```json
+[
+  {
+    "id": "1",
+    "scenarios": ["label1", "label2"],
+    "dialogues": [
+      {
+        "role": "user",
+        "content": "..."
+      },
+      {
+        "role": "assistant",
+        "content": "..."
+      },
+      ...
+    ]
+  },
+  {
+    "id": "2",
+    ...
+  },
+  ...
+]
+```
+
+**Important Guidelines:**
+- Each conversation must have exactly ${conversation_turns} turns (user-assistant pairs)
+- Scenarios should be assigned based on the actual content and context of each conversation
+- The assistant should respond in character as ${character_name}
+- Conversations should feel natural and demonstrate the character's personality and speaking style
+- Include variety in topics while staying within the specified scenarios
+

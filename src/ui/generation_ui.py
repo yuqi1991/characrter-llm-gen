@@ -1,5 +1,8 @@
 import gradio as gr
 import pandas as pd
+import asyncio
+import json
+from datetime import datetime
 from src.services import api_config_service, dataset_service, llm_service
 
 
@@ -113,9 +116,162 @@ def create_generation_ui():
         datasets = dataset_service.get_all_datasets_for_display()
         return gr.update(choices=[d["name"] for d in datasets], interactive=True)
 
+    def start_generation(
+        dataset_name,
+        api_config_name,
+        model_name,
+        num_to_generate,
+        conversation_turns,
+        parallel_requests,
+        temperature,
+        max_tokens,
+        top_p,
+        frequency_penalty,
+        presence_penalty,
+    ):
+        """开始生成语料"""
+        if not all([dataset_name, api_config_name, model_name]):
+            gr.Warning("请确保已选择数据集、API配置和模型！")
+            return "请完善生成配置", gr.update(), None
+
+        try:
+            # 显示开始信息
+            progress_msg = f"开始生成 {num_to_generate} 条语料...\n"
+            progress_msg += f"数据集: {dataset_name}\n"
+            progress_msg += f"API配置: {api_config_name}\n"
+            progress_msg += f"模型: {model_name}\n"
+            progress_msg += f"并行请求数: {parallel_requests}\n"
+
+            # 运行异步生成任务
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
+                batch = loop.run_until_complete(
+                    llm_service.generate_corpus_batch(
+                        dataset_name=dataset_name,
+                        api_config_name=api_config_name,
+                        model_name=model_name,
+                        total_count=num_to_generate,
+                        conversation_turns=conversation_turns,
+                        parallel_requests=parallel_requests,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        top_p=top_p,
+                        frequency_penalty=frequency_penalty,
+                        presence_penalty=presence_penalty,
+                    )
+                )
+
+                # 格式化结果
+                total_time = (batch.end_time - batch.start_time).total_seconds()
+                progress_msg += "\n✅ 生成完成！\n"
+                progress_msg += f"成功: {batch.completed}/{batch.total_requested}\n"
+                progress_msg += f"失败: {batch.failed}\n"
+                progress_msg += f"用时: {total_time:.2f}秒\n"
+
+                # 准备预览数据
+                preview_data = []
+                for i, conversation in enumerate(batch.results[:10]):  # 只显示前10条
+                    scenarios_str = ", ".join(conversation.get("scenarios", []))
+                    dialogues = conversation.get("dialogues", [])
+
+                    dialogue_text = ""
+                    for turn in dialogues:
+                        role = turn.get("role", "unknown")
+                        content = turn.get("content", "")
+                        dialogue_text += f"{role}: {content}\n"
+
+                    preview_data.append(
+                        {
+                            "序号": i + 1,
+                            "场景标签": scenarios_str,
+                            "对话内容": dialogue_text.strip(),
+                            "轮数": len(dialogues),
+                        }
+                    )
+
+                preview_df = pd.DataFrame(preview_data)
+
+                # 存储到全局状态以供确认入库使用
+                current_batch_state = {"batch": batch, "dataset_name": dataset_name}
+
+                gr.Info(f"生成完成！成功生成 {batch.completed} 条对话")
+                return progress_msg, preview_df, current_batch_state
+
+            finally:
+                loop.close()
+
+        except Exception as e:
+            error_msg = f"❌ 生成失败: {str(e)}"
+            gr.Warning(error_msg)
+            return error_msg, gr.update(), None
+
+    def confirm_save_results(current_batch_state):
+        """确认保存生成结果到数据库"""
+        if not current_batch_state or "batch" not in current_batch_state:
+            gr.Warning("没有可保存的生成结果！")
+            return "没有可保存的生成结果"
+
+        try:
+            batch = current_batch_state["batch"]
+            dataset_name = current_batch_state["dataset_name"]
+
+            # 保存到数据库
+            saved_count = llm_service.save_generation_results(batch, dataset_name)
+
+            success_msg = f"✅ 成功保存 {saved_count} 条语料到数据集 '{dataset_name}'"
+            gr.Info(success_msg)
+            return success_msg
+
+        except Exception as e:
+            error_msg = f"❌ 保存失败: {str(e)}"
+            gr.Warning(error_msg)
+            return error_msg
+
+    def export_results_as_json(current_batch_state):
+        """导出生成结果为JSON文件"""
+        if not current_batch_state or "batch" not in current_batch_state:
+            return None
+
+        try:
+            batch = current_batch_state["batch"]
+
+            # 准备导出数据
+            export_data = {
+                "batch_info": {
+                    "batch_id": batch.batch_id,
+                    "dataset_name": batch.dataset_name,
+                    "character_name": batch.character_name,
+                    "scenario_names": batch.scenario_names,
+                    "total_requested": batch.total_requested,
+                    "completed": batch.completed,
+                    "failed": batch.failed,
+                    "start_time": batch.start_time.isoformat(),
+                    "end_time": batch.end_time.isoformat() if batch.end_time else None,
+                },
+                "conversations": batch.results,
+            }
+
+            # 生成文件名
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"generation_results_{batch.batch_id}_{timestamp}.json"
+
+            # 写入文件
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, ensure_ascii=False, indent=2)
+
+            gr.Info(f"结果已导出到文件: {filename}")
+            return filename
+
+        except Exception as e:
+            gr.Warning(f"导出失败: {str(e)}")
+            return None
+
     # --- UI Definition ---
     with gr.Blocks(analytics_enabled=False) as generation_ui:
         selected_config_name_state = gr.State(None)
+        current_batch_state = gr.State(None)  # 存储当前生成批次的状态
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -151,9 +307,29 @@ def create_generation_ui():
                         label="温度", minimum=0.0, maximum=2.0, step=0.1, value=0.7
                     )
                     max_tokens = gr.Slider(
-                        label="最大长度", minimum=64, maximum=8192, step=64, value=2048
+                        label="最大长度", minimum=8096, maximum=128000, step=64, value=2048
                     )
-
+                    top_p = gr.Slider(
+                        label="Top P",
+                        minimum=0.0,
+                        maximum=1.0,
+                        step=0.05,
+                        value=1.0,
+                    )
+                    frequency_penalty = gr.Slider(
+                        label="频率惩罚",
+                        minimum=-2.0,
+                        maximum=2.0,
+                        step=0.1,
+                        value=0.5,
+                    )
+                    presence_penalty = gr.Slider(
+                        label="存在惩罚",
+                        minimum=-2.0,
+                        maximum=2.0,
+                        step=0.1,
+                        value=0.5,
+                    )
                     with gr.Accordion("管理API配置", open=False):
                         with gr.Tabs():
                             with gr.TabItem("添加/更新API配置"):
@@ -170,30 +346,8 @@ def create_generation_ui():
                                 base_url = gr.Textbox(
                                     label="Base URL (可选)", visible=True
                                 )
-                                top_p = gr.Slider(
-                                    label="Top P",
-                                    minimum=0.0,
-                                    maximum=1.0,
-                                    step=0.05,
-                                    value=1.0,
-                                )
-                                frequency_penalty = gr.Slider(
-                                    label="频率惩罚",
-                                    minimum=-2.0,
-                                    maximum=2.0,
-                                    step=0.1,
-                                    value=0.0,
-                                )
-                                presence_penalty = gr.Slider(
-                                    label="存在惩罚",
-                                    minimum=-2.0,
-                                    maximum=2.0,
-                                    step=0.1,
-                                    value=0.0,
-                                )
                                 with gr.Row():
                                     save_api_btn = gr.Button("💾 保存并测试")
-                                    api_test_status = gr.Label(label="连接状态")
 
                             with gr.TabItem("已存配置列表"):
                                 api_config_list = gr.Dataframe(
@@ -232,7 +386,25 @@ def create_generation_ui():
                         )
 
                 gr.Markdown("### 5. 结果预览与审核")
-                # Placeholder for results
+                with gr.Group():
+                    generation_status = gr.TextArea(
+                        label="生成状态",
+                        lines=6,
+                        placeholder="生成状态信息将在这里显示...",
+                        interactive=False,
+                    )
+
+                    results_preview = gr.Dataframe(
+                        headers=["序号", "场景标签", "对话内容", "轮数"],
+                        datatype=["number", "str", "str", "number"],
+                        label="生成结果预览 (最多显示前10条)",
+                        interactive=False,
+                        wrap=True,
+                    )
+
+                    with gr.Row():
+                        save_results_btn = gr.Button("💾 确认入库", variant="primary")
+                        export_json_btn = gr.Button("📄 导出JSON")
 
         # --- Event Handlers Binding ---
         api_form_outputs = [
@@ -318,11 +490,44 @@ def create_generation_ui():
             [api_config, api_config_list],
         )
 
-        # Event for the new "Generate Preview" button
+        # Event for the "Generate Preview" button
         generate_prompt_btn.click(
             fn=llm_service.generate_preview_prompt,
             inputs=[target_dataset, conversation_turns, num_to_generate],
             outputs=[prompt_preview],
+        )
+
+        # Event for the "Start Generation" button
+        start_generation_btn.click(
+            fn=start_generation,
+            inputs=[
+                target_dataset,
+                api_config,
+                model_name,
+                num_to_generate,
+                conversation_turns,
+                parallel_requests,
+                temperature,
+                max_tokens,
+                top_p,
+                frequency_penalty,
+                presence_penalty,
+            ],
+            outputs=[generation_status, results_preview, current_batch_state],
+        )
+
+        # Event for the "Save Results" button
+        save_results_btn.click(
+            fn=confirm_save_results,
+            inputs=[current_batch_state],
+            outputs=[generation_status],
+        )
+
+        # Event for the "Export JSON" button
+        export_json_btn.click(
+            fn=export_results_as_json,
+            inputs=[current_batch_state],
+            outputs=None,  # File download handled internally
         )
 
     return generation_ui

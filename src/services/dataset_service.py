@@ -6,9 +6,11 @@ from src.database.database_manager import DatabaseManager
 from src.models.data_models import Dataset, Character, Scenario, Corpus
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
+import logging
 
 
 db_manager = DatabaseManager()
+logger = logging.getLogger(__name__)
 
 
 def get_all_datasets_for_display():
@@ -224,6 +226,198 @@ def get_dataset_stats(dataset_id):
         scenario_counts = {name: count for name, count in scenario_counts_query}
 
         return {"total_corpus_count": total_count, "scenario_counts": scenario_counts}
+    finally:
+        session.close()
+
+
+def save_corpus_to_dataset(
+    dataset_name: str, dialogue_data: dict, scenario_names: list
+) -> int:
+    """
+    保存一条语料到指定数据集
+
+    Args:
+        dataset_name: 目标数据集名称
+        dialogue_data: 对话数据，包含dialogues、scenario_labels等字段
+        scenario_names: 关联的场景标签名称列表
+
+    Returns:
+        保存的语料ID
+    """
+    session = db_manager.get_session()
+    try:
+        # 获取数据集
+        dataset = session.query(Dataset).filter(Dataset.name == dataset_name).first()
+        if not dataset:
+            raise ValueError(f"数据集 '{dataset_name}' 不存在")
+
+        # 获取场景对象
+        scenarios = []
+        if scenario_names:
+            scenarios = (
+                session.query(Scenario).filter(Scenario.name.in_(scenario_names)).all()
+            )
+
+        # 创建语料条目
+        corpus = Corpus(dialogue=dialogue_data, dataset=dataset, scenarios=scenarios)
+
+        session.add(corpus)
+        session.commit()
+
+        logger.info(f"成功保存语料到数据集 '{dataset_name}'，ID: {corpus.id}")
+        return corpus.id
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"保存语料失败: {e}")
+        raise e
+    finally:
+        session.close()
+
+
+def batch_save_corpus_to_dataset(dataset_name: str, conversations: list) -> int:
+    """
+    批量保存语料到指定数据集
+
+    Args:
+        dataset_name: 目标数据集名称
+        conversations: 对话列表，每个元素包含对话数据和场景信息
+
+    Returns:
+        成功保存的语料数量
+    """
+    session = db_manager.get_session()
+    saved_count = 0
+
+    try:
+        # 获取数据集
+        dataset = session.query(Dataset).filter(Dataset.name == dataset_name).first()
+        if not dataset:
+            raise ValueError(f"数据集 '{dataset_name}' 不存在")
+
+        # 获取所有可能的场景
+        all_scenario_names = set()
+        for conv in conversations:
+            all_scenario_names.update(conv.get("scenarios", []))
+
+        scenarios_dict = {}
+        if all_scenario_names:
+            scenarios = (
+                session.query(Scenario)
+                .filter(Scenario.name.in_(all_scenario_names))
+                .all()
+            )
+            scenarios_dict = {s.name: s for s in scenarios}
+
+        # 批量创建语料条目
+        for conversation in conversations:
+            try:
+                # 转换对话格式
+                dialogue_data = {
+                    "scenario_labels": conversation.get("scenarios", []),
+                    "dialogues": conversation.get("dialogues", []),
+                    "turn_count": len(conversation.get("dialogues", [])),
+                    "batch_id": conversation.get("batch_id"),
+                    "generation_time": conversation.get("generation_time"),
+                }
+
+                # 获取相关场景
+                conv_scenarios = []
+                for scenario_name in conversation.get("scenarios", []):
+                    if scenario_name in scenarios_dict:
+                        conv_scenarios.append(scenarios_dict[scenario_name])
+
+                # 创建语料条目
+                corpus = Corpus(
+                    dialogue=dialogue_data, dataset=dataset, scenarios=conv_scenarios
+                )
+
+                session.add(corpus)
+                saved_count += 1
+
+            except Exception as e:
+                logger.error(f"保存单条语料失败: {e}")
+                continue
+
+        session.commit()
+        logger.info(
+            f"批量保存完成，成功保存 {saved_count}/{len(conversations)} 条语料到数据集 '{dataset_name}'"
+        )
+        return saved_count
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"批量保存语料失败: {e}")
+        raise e
+    finally:
+        session.close()
+
+
+def get_corpus_preview_data(dataset_id: int, limit: int = 50) -> list:
+    """
+    获取数据集的语料预览数据
+
+    Args:
+        dataset_id: 数据集ID
+        limit: 返回的最大条数
+
+    Returns:
+        语料预览数据列表
+    """
+    if not dataset_id:
+        return []
+
+    session = db_manager.get_session()
+    try:
+        corpus_entries = (
+            session.query(Corpus)
+            .filter(Corpus.dataset_id == dataset_id)
+            .options(joinedload(Corpus.scenarios))
+            .order_by(Corpus.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        result = []
+        for entry in corpus_entries:
+            dialogue_data = entry.dialogue
+            scenarios_str = ", ".join([s.name for s in entry.scenarios])
+
+            # 格式化对话内容为可读形式
+            if isinstance(dialogue_data, dict) and "dialogues" in dialogue_data:
+                dialogue_text = ""
+                for turn in dialogue_data["dialogues"]:
+                    role = turn.get("role", "unknown")
+                    content = turn.get("content", "")
+                    dialogue_text += f"{role}: {content}\n"
+            else:
+                dialogue_text = str(dialogue_data)
+
+            result.append(
+                {
+                    "id": entry.id,
+                    "scenarios": scenarios_str,
+                    "dialogue_text": dialogue_text.strip(),
+                    "turn_count": (
+                        dialogue_data.get("turn_count", 0)
+                        if isinstance(dialogue_data, dict)
+                        else 0
+                    ),
+                    "created_at": (
+                        entry.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                        if entry.created_at
+                        else ""
+                    ),
+                    "batch_id": (
+                        dialogue_data.get("batch_id", "")
+                        if isinstance(dialogue_data, dict)
+                        else ""
+                    ),
+                }
+            )
+
+        return result
+
     finally:
         session.close()
 
