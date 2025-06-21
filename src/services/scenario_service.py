@@ -22,6 +22,17 @@ def session_scope():
         session.close()
 
 
+def get_all_scenarios():
+    """获取所有场景，返回字典列表"""
+    with session_scope() as session:
+        scenarios = session.query(Scenario).order_by(Scenario.name).all()
+        logger.info(f"成功获取 {len(scenarios)} 个场景")
+        return [
+            {"id": s.id, "name": s.name, "description": s.description}
+            for s in scenarios
+        ]
+
+
 def get_all_scenarios_for_display():
     """获取所有场景，用于在Dataframe中显示"""
     with session_scope() as session:

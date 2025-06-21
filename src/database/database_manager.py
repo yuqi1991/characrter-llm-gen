@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker, scoped_session
 from src.models.data_models import Base  # Import Base from data_models
 
 # Import all models here so that Base knows about them
-from src.models.data_models import Character, ApiConfig, Scenario
+from src.models.data_models import Character, ApiConfig, Scenario, Dataset, Corpus
 
 logger = logging.getLogger(__name__)
 

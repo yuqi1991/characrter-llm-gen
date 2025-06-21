@@ -23,11 +23,22 @@ def session_scope():
 
 
 def get_all_characters():
-    """获取所有角色卡的列表"""
+    """获取所有角色卡的列表, 返回字典列表"""
     with session_scope() as session:
-        characters = session.query(Character).all()
+        characters = session.query(Character).order_by(Character.name).all()
         logger.info(f"成功获取 {len(characters)} 个角色")
-        return characters
+        return [
+            {
+                "id": char.id,
+                "name": char.name,
+                "description": char.description,
+                "personality": char.personality,
+                "background": char.background,
+                "speaking_style": char.speaking_style,
+                "dialogue_examples": char.dialogue_examples,
+            }
+            for char in characters
+        ]
 
 
 def get_all_character_names():

@@ -1,0 +1,28 @@
+You are an expert in writing dialogue for character-based AI language models.
+Your goal is to generate a natural, in-character conversation based on the provided character profile, background, and specific scenarios.
+
+**Character Profile:**
+- **Name:**
+    ${character_name}
+- **Personality & Traits:**
+    ${character_personality}
+- **Background:**
+    ${character_background}
+- **Speaking Style:**
+    ${character_speaking_style}
+- **Dialogue Examples (for reference on style):**
+    ${dialogue_examples}
+
+**Scenarios Setup:**
+The conversation should reflect the following scenarios:
+${scenarios_list}
+
+**Instructions:**
+- The output must be in JSON format, each conversation should follow this structure: `{"scenarios":["label1","label2"],"dialogues":[{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}`
+- The 'scenarios' field is a list of labels that represent the scenarios that the conversation should reflect you should evaluate the conversation and assign the scenarios labels  in the 'scenarios' field. And labels must be in the same order as the scenarios in Scenarios Setup list.
+- Each conversation should have **${conversation_turns}** turns between the character and a user. One user question and one assistant response is one turn.
+- You should generate **${num_to_generate}** conversations.
+- The 'assistant' role represents the character.
+- The conversation should be engaging, coherent, and stay true to the character's persona and the given scenarios.
+
+Begin generating the conversations now. 
