@@ -172,7 +172,7 @@ def create_generation_ui():
 
                 # 准备预览数据
                 preview_data = []
-                for i, conversation in enumerate(batch.results[:10]):  # 只显示前10条
+                for i, conversation in enumerate(batch.results):  # 只显示前10条
                     scenarios_str = ", ".join(conversation.get("scenarios", []))
                     dialogues = conversation.get("dialogues", [])
 
@@ -180,7 +180,7 @@ def create_generation_ui():
                     for turn in dialogues:
                         role = turn.get("role", "unknown")
                         content = turn.get("content", "")
-                        dialogue_text += f"{role}: {content}\n"
+                        dialogue_text += f"{role}: {content} \n"
 
                     preview_data.append(
                         {
@@ -307,7 +307,11 @@ def create_generation_ui():
                         label="温度", minimum=0.0, maximum=2.0, step=0.1, value=0.7
                     )
                     max_tokens = gr.Slider(
-                        label="最大长度", minimum=8096, maximum=128000, step=64, value=2048
+                        label="最大长度",
+                        minimum=8096,
+                        maximum=128000,
+                        step=64,
+                        value=20000,
                     )
                     top_p = gr.Slider(
                         label="Top P",
@@ -397,9 +401,10 @@ def create_generation_ui():
                     results_preview = gr.Dataframe(
                         headers=["序号", "场景标签", "对话内容", "轮数"],
                         datatype=["number", "str", "str", "number"],
-                        label="生成结果预览 (最多显示前10条)",
-                        interactive=False,
-                        wrap=True,
+                        label="生成结果预览",
+                        interactive=True,
+                        wrap=False,
+                        row_count=(20, "dynamic"),
                     )
 
                     with gr.Row():

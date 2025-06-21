@@ -17,12 +17,15 @@ Your goal is to generate a natural, in-character conversation based on the provi
 The conversation should reflect the following scenarios:
 ${scenarios_list}
 
+**Language**
+- Simplified Chinese
+
 **Output Format Requirements:**
 You must generate exactly **${num_to_generate}** conversations in a structured JSON format. Each conversation should:
 
 1. Include a "scenarios" field with relevant scenario labels from the Scenarios Setup
 2. Include a "dialogues" field with exactly **${conversation_turns}** dialogue turns
-3. Each dialogue turn has a "role" field ("user" or "assistant") and a "content" field
+3. Each dialogue turn must have at least one user content and one assistant content
 4. The "assistant" role represents the character ${character_name}
 5. Conversations should be engaging, coherent, and stay true to the character's persona
 
@@ -58,5 +61,5 @@ Please generate the conversations following the structured format exactly.
 - Scenarios should be assigned based on the actual content and context of each conversation
 - The assistant should respond in character as ${character_name}
 - Conversations should feel natural and demonstrate the character's personality and speaking style
-- Include variety in topics while staying within the specified scenarios
-
+- Include variety in topics or personal status while staying within the specified scenarios
+- Output json content string directly, do not include any other text or comments
