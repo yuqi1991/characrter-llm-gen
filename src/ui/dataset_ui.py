@@ -163,6 +163,38 @@ def create_dataset_ui():
                 gr.update(),
             )
 
+    def on_export_corpus(dataset_id, export_format):
+        """导出语料库数据"""
+        if not dataset_id:
+            gr.Warning("请先选择一个数据集！")
+            return None
+
+        try:
+            if export_format == "完整格式 (JSONL)":
+                filename = dataset_service.export_dataset_corpus_to_jsonl(dataset_id)
+            elif export_format == "训练格式 (JSONL)":
+                filename = dataset_service.export_dataset_corpus_to_standard_format(
+                    dataset_id
+                )
+            else:
+                gr.Warning("请选择导出格式！")
+                return None
+
+            # 检查文件是否存在
+            import os
+
+            if os.path.exists(filename):
+                gr.Info(
+                    "语料库已成功导出！文件已准备好下载。",
+                )
+                return gr.update(value=filename, visible=True)
+            else:
+                gr.Warning("文件生成失败，请重试")
+                return gr.update(visible=False)
+        except Exception as e:
+            gr.Warning(f"导出失败: {str(e)}")
+            return gr.update(visible=False)
+
     def on_add_new_dataset():
         return None, "", "", None, []
 
@@ -185,6 +217,19 @@ def create_dataset_ui():
                     add_btn = gr.Button("✨ 添加新数据集")
                     delete_btn = gr.Button("🗑️ 删除数据集", variant="stop")
                 save_btn = gr.Button("💾 保存数据集配置", variant="primary")
+
+                # 添加导出功能区域
+                gr.Markdown("### 语料库导出")
+                with gr.Group():
+                    export_format = gr.Dropdown(
+                        label="导出格式",
+                        choices=["完整格式 (JSONL)", "训练格式 (JSONL)"],
+                        value="完整格式 (JSONL)",
+                        info="完整格式包含所有元数据，训练格式适用于模型微调",
+                    )
+                    export_btn = gr.Button("📥 导出语料库", variant="secondary")
+                    export_file = gr.File(label="下载文件", visible=False)
+
             with gr.Column(scale=2):
                 gr.Markdown("### 数据集预览与统计")
                 with gr.Row():
@@ -237,6 +282,13 @@ def create_dataset_ui():
             fn=on_delete_dataset,
             inputs=[selected_dataset_id_state],
             outputs=[dataset_dropdown, *outputs_left_panel, *outputs_right_panel],
+        )
+
+        # 添加导出事件处理
+        export_btn.click(
+            fn=on_export_corpus,
+            inputs=[selected_dataset_id_state, export_format],
+            outputs=[export_file],
         )
 
         filter_by_scenario_dropdown.change(

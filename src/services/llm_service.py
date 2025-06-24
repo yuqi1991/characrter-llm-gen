@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from string import Template
 from openai import OpenAI, AsyncOpenAI
-import google.generativeai as genai
+from google import genai
 from pydantic import BaseModel, Field
 from src.services import dataset_service, character_service, api_config_service
 import os

@@ -37,6 +37,81 @@ css = """
     color: #5D6D7E;
     margin-bottom: 25px;
 }
+
+/* Fix transparent background for info/warning/error messages */
+.toast-wrap {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.toast-body {
+    background: transparent !important;
+    color: #333 !important;
+    font-weight: 500 !important;
+}
+
+/* Info messages */
+.toast-wrap.toast-info {
+    background: rgba(59, 130, 246, 0.1) !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+.toast-wrap.toast-info .toast-body {
+    color: #1e40af !important;
+}
+
+/* Success messages */
+.toast-wrap.toast-success {
+    background: rgba(34, 197, 94, 0.1) !important;
+    border-color: rgba(34, 197, 94, 0.3) !important;
+}
+
+.toast-wrap.toast-success .toast-body {
+    color: #166534 !important;
+}
+
+/* Warning messages */
+.toast-wrap.toast-warning {
+    background: rgba(245, 158, 11, 0.1) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.toast-wrap.toast-warning .toast-body {
+    color: #92400e !important;
+}
+
+/* Error messages */
+.toast-wrap.toast-error {
+    background: rgba(239, 68, 68, 0.1) !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.toast-wrap.toast-error .toast-body {
+    color: #dc2626 !important;
+}
+
+/* Alternative approach for older Gradio versions */
+.gr-form {
+    background: white !important;
+}
+
+/* Ensure toast notifications are visible */
+.toast-container {
+    z-index: 9999 !important;
+}
+
+/* Fix notification positioning */
+.toast {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+    border-radius: 8px !important;
+    color: #333 !important;
+    backdrop-filter: blur(10px) !important;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1) !important;
+}
 """
 
 

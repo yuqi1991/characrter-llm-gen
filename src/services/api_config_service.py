@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from src.database.database_manager import DatabaseManager
 from src.models.data_models import ApiConfig
 from openai import OpenAI
-import google.generativeai as genai
+from google import genai
 
 
 # We will need an encryption utility. For now, we can create placeholder functions.

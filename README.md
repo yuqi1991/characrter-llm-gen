@@ -143,7 +143,7 @@ character,scenario,conversation,quality_score,created_at
 ## 🛠️ 技术栈
 
 - **前端框架**：Gradio WebUI
-- **后端语言**：Python 3.8+
+- **后端语言**：Python 3.10+
 - **数据库**：SQLite
 - **LLM接口**：OpenAI API（Google AI API、Anthropic API日后支持）
 

@@ -7,10 +7,16 @@ from src.models.data_models import Dataset, Character, Scenario, Corpus
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 import logging
+import json
+import os
+import shutil
+from datetime import datetime
 
 
 db_manager = DatabaseManager()
 logger = logging.getLogger(__name__)
+
+EXPORT_DIR = "export"
 
 
 def get_all_datasets_for_display():
@@ -421,6 +427,195 @@ def get_corpus_preview_data(dataset_id: int, limit: int = 50) -> list:
 
         return result
 
+    finally:
+        session.close()
+
+
+def _prepare_export_dir():
+    """Prepares the export directory by cleaning and recreating it."""
+    try:
+        if os.path.exists(EXPORT_DIR):
+            shutil.rmtree(EXPORT_DIR)
+        os.makedirs(EXPORT_DIR, exist_ok=True)
+        logger.info(f"Export directory '{EXPORT_DIR}' prepared.")
+    except Exception as e:
+        logger.error(f"Failed to prepare export directory: {e}")
+        raise
+
+
+def export_dataset_corpus_to_jsonl(dataset_id: int) -> str:
+    """
+    导出数据集的所有语料为JSONL格式文件
+
+    Args:
+        dataset_id: 数据集ID
+
+    Returns:
+        生成的JSONL文件路径
+    """
+    if not dataset_id:
+        raise ValueError("数据集ID不能为空")
+
+    session = db_manager.get_session()
+    try:
+        # 获取数据集信息
+        dataset = session.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if not dataset:
+            raise ValueError(f"未找到ID为 {dataset_id} 的数据集")
+
+        # 获取所有语料
+        corpus_entries = (
+            session.query(Corpus)
+            .filter(Corpus.dataset_id == dataset_id)
+            .options(joinedload(Corpus.scenarios))
+            .order_by(Corpus.created_at.asc())
+            .all()
+        )
+
+        if not corpus_entries:
+            raise ValueError("该数据集没有语料数据")
+
+        _prepare_export_dir()
+
+        # 生成文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"corpus_{dataset.name}_{timestamp}.jsonl"
+        filepath = os.path.join(EXPORT_DIR, filename)
+
+        # 生成JSONL内容
+        with open(filepath, "w", encoding="utf-8") as f:
+            for entry in corpus_entries:
+                # 构建标准的对话格式
+                jsonl_entry = {
+                    "id": entry.id,
+                    "dataset_name": dataset.name,
+                    "created_at": (
+                        entry.created_at.isoformat() if entry.created_at else None
+                    ),
+                    "scenarios": [s.name for s in entry.scenarios],
+                }
+
+                # 处理对话数据
+                dialogue_data = entry.dialogue
+                if isinstance(dialogue_data, dict):
+                    # 如果是结构化数据，直接使用
+                    jsonl_entry.update(
+                        {
+                            "conversations": dialogue_data.get("dialogues", []),
+                            "turn_count": dialogue_data.get("turn_count", 0),
+                            "batch_id": dialogue_data.get("batch_id", ""),
+                            "scenario_labels": dialogue_data.get("scenario_labels", []),
+                        }
+                    )
+                else:
+                    # 如果是其他格式，尝试解析
+                    try:
+                        parsed_dialogue = json.loads(str(dialogue_data))
+                        jsonl_entry["conversations"] = parsed_dialogue.get(
+                            "dialogues", []
+                        )
+                        jsonl_entry["turn_count"] = (
+                            len(parsed_dialogue.get("dialogues", [])) // 2
+                        )
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        # 如果解析失败，将原始数据存储为字符串
+                        jsonl_entry["raw_dialogue"] = str(dialogue_data)
+                        jsonl_entry["conversations"] = []
+                        jsonl_entry["turn_count"] = 0
+
+                # 写入JSONL文件（每行一个JSON对象）
+                f.write(json.dumps(jsonl_entry, ensure_ascii=False) + "\n")
+
+        logger.info(f"成功导出 {len(corpus_entries)} 条语料到文件: {filepath}")
+        return filepath
+
+    except Exception as e:
+        logger.error(f"导出语料库失败: {e}")
+        raise e
+    finally:
+        session.close()
+
+
+def export_dataset_corpus_to_standard_format(dataset_id: int) -> str:
+    """
+    导出数据集的语料为标准训练格式的JSONL文件
+    每行包含 {"messages": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+
+    Args:
+        dataset_id: 数据集ID
+
+    Returns:
+        生成的JSONL文件路径
+    """
+    if not dataset_id:
+        raise ValueError("数据集ID不能为空")
+
+    session = db_manager.get_session()
+    try:
+        # 获取数据集信息
+        dataset = (
+            session.query(Dataset)
+            .options(joinedload(Dataset.character))
+            .filter(Dataset.id == dataset_id)
+            .first()
+        )
+        if not dataset:
+            raise ValueError(f"未找到ID为 {dataset_id} 的数据集")
+
+        # 获取所有语料
+        corpus_entries = (
+            session.query(Corpus)
+            .filter(Corpus.dataset_id == dataset_id)
+            .options(joinedload(Corpus.scenarios))
+            .order_by(Corpus.created_at.asc())
+            .all()
+        )
+
+        if not corpus_entries:
+            raise ValueError("该数据集没有语料数据")
+
+        _prepare_export_dir()
+
+        # 生成文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"training_{dataset.name}_{timestamp}.jsonl"
+        filepath = os.path.join(EXPORT_DIR, filename)
+
+        # 生成标准训练格式的JSONL内容
+        with open(filepath, "w", encoding="utf-8") as f:
+            for entry in corpus_entries:
+                dialogue_data = entry.dialogue
+
+                # 提取对话内容
+                messages = []
+                if isinstance(dialogue_data, dict) and "dialogues" in dialogue_data:
+                    for turn in dialogue_data["dialogues"]:
+                        role = turn.get("role", "user")
+                        content = turn.get("content", "")
+                        if content.strip():  # 只添加非空内容
+                            messages.append({"role": role, "content": content})
+
+                # 只有当有有效对话时才写入文件
+                if messages and len(messages) >= 2:  # 至少要有一轮完整对话
+                    training_entry = {
+                        "messages": messages,
+                        "metadata": {
+                            "dataset": dataset.name,
+                            "character": (
+                                dataset.character.name if dataset.character else None
+                            ),
+                            "scenarios": [s.name for s in entry.scenarios],
+                            "corpus_id": entry.id,
+                        },
+                    }
+                    f.write(json.dumps(training_entry, ensure_ascii=False) + "\n")
+
+        logger.info(f"成功导出标准训练格式文件: {filepath}")
+        return filepath
+
+    except Exception as e:
+        logger.error(f"导出标准训练格式失败: {e}")
+        raise e
     finally:
         session.close()
 
