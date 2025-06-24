@@ -209,7 +209,7 @@ def get_dataset_stats(dataset_id):
     session = db_manager.get_session()
     try:
         # Get total count
-        total_count = (
+        num_to_generate = (
             session.query(Corpus).filter(Corpus.dataset_id == dataset_id).count()
         )
 
@@ -225,7 +225,10 @@ def get_dataset_stats(dataset_id):
 
         scenario_counts = {name: count for name, count in scenario_counts_query}
 
-        return {"total_corpus_count": total_count, "scenario_counts": scenario_counts}
+        return {
+            "total_corpus_count": num_to_generate,
+            "scenario_counts": scenario_counts,
+        }
     finally:
         session.close()
 
@@ -316,7 +319,7 @@ def batch_save_corpus_to_dataset(dataset_name: str, conversations: list) -> int:
                 dialogue_data = {
                     "scenario_labels": conversation.get("scenarios", []),
                     "dialogues": conversation.get("dialogues", []),
-                    "turn_count": len(conversation.get("dialogues", [])),
+                    "turn_count": len(conversation.get("dialogues", [])) // 2,
                     "batch_id": conversation.get("batch_id"),
                     "generation_time": conversation.get("generation_time"),
                 }

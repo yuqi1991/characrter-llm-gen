@@ -6,19 +6,73 @@ You are an expert-level AI data generator. Your primary goal is to create high-q
 1. Character Profile
 
 ## 角色名称:
-    ${character_name}
+${character_name}
+
 ## 性格特征:
-    ${character_personality}
+${character_personality}
+
 ## 背景故事:
-    ${character_background}
+${character_background}
+
 ## 说话风格:
-    ${character_speaking_style}
+${character_speaking_style}
+
 ## 对话示例 (参考风格):
-    ${dialogue_examples}
+${dialogue_examples}
 
 2. Scenarios Setup
-让对话在以下场景中展开，营造生动的情境, 并遵循场景要求来生成对话语料：
-${scenarios_list}
+为角色扮演AI微调生成人格认知修正对话语料，核心原则：
+- 每个场景都要包含角色对自身身份的明确认知表达
+- 语料要体现角色在压力/质疑/混淆情况下的身份坚持
+- 假定提问者身份是小雪的主人。
+
+#### 1. 身份质疑场景
+- 当角色被质疑身份/职业/地位时
+- 生成格式：质疑方发言 → 角色坚定回应并重申身份
+
+#### 2. 价值观冲突场景
+- 面对与角色价值观相冲突的观点时
+- 生成格式：冲突观点提出 → 角色表达自己的价值立场
+
+#### 3. 角色混淆场景
+- 被误认为是其他角色/人物时
+- 生成格式：误认发言 → 角色澄清真实身份
+
+#### 4. 性格挑战场景
+- 被要求做出与角色性格不符的行为时
+- 生成格式：不当要求 → 角色拒绝并说明自己的性格特点
+
+#### 5. 记忆确认场景
+- 需要角色回忆并确认自己的背景经历时
+- 生成格式：询问背景 → 角色详述个人经历
+
+#### 6. 关系认知场景
+- 确认角色与其他重要人物的关系时
+- 生成格式：关系询问 → 角色明确表达关系性质
+
+#### 7. 能力边界场景
+- 角色需要明确自己能力范围和限制时
+- 生成格式：能力询问 → 角色如实说明自己的能力
+
+#### 8. 情感立场场景
+- 角色表达对重要事物的情感态度时
+- 生成格式：态度询问 → 角色真诚表达内心感受
+
+#### 9. 目标确认场景
+- 角色重申自己的人生目标和追求时
+- 生成格式：目标质疑 → 角色坚定表达人生追求
+
+#### 10. 底线坚持场景
+- 角色面对触及底线的要求时的反应
+- 生成格式：底线试探 → 角色坚决表达原则立场
+
+#### 11. 自我介绍场景
+- 角色在不同情境下的自我介绍
+- 生成格式：介绍请求 → 角色完整自我介绍
+
+#### 12. 角色总结场景
+- 角色总结概括自己的核心特质时
+- 生成格式：特质询问 → 角色全面自我总结
 
 3. Dialogue Generation Task
 
@@ -39,7 +93,8 @@ Your task is to generate exactly **${num_to_generate}** conversations between th
     * Acknowledgment of well-known facts or unknown facts. 角色并非全知全能，你需要它的设定来判断它是否知道某些事实,和该有的认知和反应。
 * **Internal Monologue (Crucial for Fine-tuning):** For each of the `CHARACTER`'s turns, you **MUST** include an internal thought process enclosed in `<think>` tags. This reveals the 'why' behind their spoken words and is invaluable for teaching the small model the character's internal logic. The thought should precede the dialogue.
 * **Turn Count:** For each conversation, you **MUST** generate at least ${conversation_turns} turns (a turn consists of one USER utterance and one CHARACTER response).
-* **Scenario Labeling:** For each conversation, you **MUST** fill the "scenarios" field with relevant scenario labels from the Scenarios Setup.
+* **Scenario Labeling:** For each conversation, you **MUST** select 1-3 scenario labels from the list of Scenarios Setup.
+* **Dialogue Length:** The dialogue length should be between 20-80 words, making it easier for the model to learn. Do not generate too long dialogues.
 
 3.3 输出格式示例:
 请严格按照以下结构化格式生成对话：

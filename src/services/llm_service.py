@@ -161,7 +161,7 @@ async def call_openai_structured(
 ) -> Dict[str, Any]:
     """调用OpenAI API并要求结构化输出"""
     try:
-        print(prompt)
+        logger.debug(prompt)
         response = await client.chat.completions.create(
             model=model,
             messages=[
@@ -181,7 +181,7 @@ async def call_openai_structured(
         )
 
         if response.choices[0].message.content:
-            print(response.choices[0].message.content)
+            logger.debug(response.choices[0].message.content)
             try:
                 content = response.choices[0].message.content
                 clean_string = content.removeprefix("```json\n").removesuffix("\n```")
@@ -194,7 +194,7 @@ async def call_openai_structured(
                     return {"conversations": []}
             except json.JSONDecodeError:
                 logger.error(
-                    f"无法解析响应为JSON: {response.choices[0].message.content}"
+                    f"无法解析响应为JSON: \n {response.choices[0].message.content}"
                 )
                 return {"conversations": []}
         else:
@@ -286,9 +286,11 @@ async def generate_corpus_batch(
     dataset_name: str,
     api_config_name: str,
     model_name: str,
-    total_count: int,
+    num_to_generate: int,
     conversation_turns: int,
-    parallel_requests: int,
+    total_requests: int,
+    max_parallel_requests: int,
+    batch_cooldown_seconds: int,
     temperature: float = 0.7,
     max_tokens: int = 8096,
     top_p: float = 1.0,
@@ -310,9 +312,8 @@ async def generate_corpus_batch(
         raise ValueError(f"数据集 '{dataset_name}' 不存在")
 
     # 生成基础提示词
-    batch_size = total_count // parallel_requests
     base_prompt = generate_preview_prompt(
-        dataset_name, conversation_turns, batch_size, template_path
+        dataset_name, conversation_turns, num_to_generate, template_path
     )  # 模板中用1，后续会替换
 
     # 创建批次信息
@@ -321,13 +322,13 @@ async def generate_corpus_batch(
         dataset_name=dataset_name,
         character_name=dataset.get("character_name", ""),
         scenario_names=[s["name"] for s in dataset.get("scenario_objects", [])],
-        total_requested=total_count,
+        total_requested=total_requests * num_to_generate,
         start_time=datetime.now(),
     )
 
     # 创建任务列表
     tasks = []
-    for i in range(parallel_requests):
+    for i in range(total_requests):
         task = generate_single_batch(
             api_config=api_config,
             prompt=base_prompt,
@@ -339,8 +340,14 @@ async def generate_corpus_batch(
             presence_penalty=presence_penalty,
         )
         tasks.append(task)
+        logger.info(f"生成任务 {i+1} 已添加: 请求生成{num_to_generate} 条语料")
+        if i % max_parallel_requests == 0:
+            await asyncio.sleep(batch_cooldown_seconds)
 
-    logger.info(f"开始并行生成 {len(tasks)} 个批次，总共 {total_count} 条对话")
+    logger.info(
+        f"开始并行生成 {len(tasks)} 个批次，每次请求生成 {num_to_generate} 条对话，最大并行请求数 {max_parallel_requests}，\
+            冷却时间 {batch_cooldown_seconds} 秒，总请求数量 {total_requests}"
+    )
 
     # 并行执行所有任务
     try:
@@ -395,7 +402,7 @@ def save_generation_results(batch: GenerationBatch, dataset_name: str) -> int:
                     }
                     for turn in conversation.get("dialogues", [])
                 ],
-                "turn_count": len(conversation.get("dialogues", [])),
+                "turn_count": len(conversation.get("dialogues", [])) // 2,
                 "batch_id": batch.batch_id,
                 "generation_time": batch.start_time.isoformat(),
             }

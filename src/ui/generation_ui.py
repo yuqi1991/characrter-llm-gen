@@ -142,7 +142,9 @@ def create_generation_ui():
         model_name,
         num_to_generate,
         conversation_turns,
-        parallel_requests,
+        total_requests,
+        max_parallel_requests,
+        batch_cooldown_seconds,
         temperature,
         max_tokens,
         top_p,
@@ -168,7 +170,7 @@ def create_generation_ui():
             progress_msg += f"模板: {template_name}\n"
             progress_msg += f"API配置: {api_config_name}\n"
             progress_msg += f"模型: {model_name}\n"
-            progress_msg += f"并行请求数: {parallel_requests}\n"
+            progress_msg += f"并行请求数: {max_parallel_requests}\n"
 
             # 运行异步生成任务
             loop = asyncio.new_event_loop()
@@ -180,9 +182,11 @@ def create_generation_ui():
                         dataset_name=dataset_name,
                         api_config_name=api_config_name,
                         model_name=model_name,
-                        total_count=num_to_generate,
+                        num_to_generate=num_to_generate,
                         conversation_turns=conversation_turns,
-                        parallel_requests=parallel_requests,
+                        total_requests=total_requests,
+                        max_parallel_requests=max_parallel_requests,
+                        batch_cooldown_seconds=batch_cooldown_seconds,
                         temperature=temperature,
                         max_tokens=max_tokens,
                         top_p=top_p,
@@ -311,18 +315,37 @@ def create_generation_ui():
                 gr.Markdown("### 2. 配置生成参数")
                 with gr.Group():
                     num_to_generate = gr.Slider(
-                        label="总生成数量", minimum=1, maximum=1000, step=1, value=10
+                        label="单次请求生成数量",
+                        minimum=1,
+                        maximum=200,
+                        step=1,
+                        value=10,
                     )
                     conversation_turns = gr.Slider(
                         label="每条语料对话轮数", minimum=1, maximum=20, step=1, value=3
                     )
-                    parallel_requests = gr.Slider(
-                        label="并行请求数",
+                    total_requests = gr.Slider(
+                        label="总请求数量",
+                        minimum=1,
+                        maximum=500,
+                        step=1,
+                        value=1,
+                    )
+                    max_parallel_requests = gr.Slider(
+                        label="最大并行请求数",
                         minimum=1,
                         maximum=20,
                         step=1,
                         value=1,
                         info="同时发送给LLM的请求数量",
+                    )
+                    batch_cooldown_seconds = gr.Slider(
+                        label="冷却时间",
+                        minimum=1,
+                        maximum=30,
+                        step=1,
+                        value=0,
+                        info="每批请求之间的冷却时间，单位秒，避免被封号",
                     )
 
                 gr.Markdown("### 3. 配置API调用")
@@ -466,7 +489,9 @@ def create_generation_ui():
         all_sliders = [
             num_to_generate,
             conversation_turns,
-            parallel_requests,
+            total_requests,
+            batch_cooldown_seconds,
+            max_parallel_requests,
             temperature,
             max_tokens,
             top_p,
@@ -597,7 +622,9 @@ def create_generation_ui():
                 model_name,
                 num_to_generate,
                 conversation_turns,
-                parallel_requests,
+                total_requests,
+                max_parallel_requests,
+                batch_cooldown_seconds,
                 temperature,
                 max_tokens,
                 top_p,
