@@ -9,6 +9,8 @@ from openai import OpenAI, AsyncOpenAI
 import google.generativeai as genai
 from pydantic import BaseModel, Field
 from src.services import dataset_service, character_service, api_config_service
+import os
+import glob
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,32 @@ class GenerationBatch(BaseModel):
     end_time: Optional[datetime] = None
 
 
+def get_prompt_templates() -> List[Dict[str, str]]:
+    """获取所有可用的提示词模板文件列表"""
+    try:
+        template_dir = "templates/prompts"
+        if not os.path.exists(template_dir):
+            return [
+                {"name": "默认模板", "path": "templates/prompts/generation_prompt.txt"}
+            ]
+
+        # 获取所有.txt文件
+        pattern = os.path.join(template_dir, "*.txt")
+        template_files = glob.glob(pattern)
+
+        templates = []
+        for file_path in template_files:
+            filename = os.path.basename(file_path)
+            templates.append({"name": filename, "path": file_path})
+
+        # 按名称排序，确保默认模板在前面
+        templates.sort(key=lambda x: (x["name"] != "默认模板", x["name"]))
+        return templates
+    except Exception as e:
+        logger.error(f"获取模板文件列表失败: {e}")
+        return [{"name": "默认模板", "path": "templates/prompts/generation_prompt.txt"}]
+
+
 def read_prompt_template(
     file_path="templates/prompts/generation_prompt.txt",
 ) -> Template:
@@ -62,54 +90,62 @@ def read_prompt_template(
 
 
 def generate_preview_prompt(
-    dataset_name: str, conversation_turns: int, num_to_generate: int
+    dataset_name: str,
+    conversation_turns: int,
+    num_to_generate: int,
+    template_path: str = "templates/prompts/generation_prompt.txt",
 ) -> str:
     """
     Generates the final prompt for LLM based on a dataset and parameters.
     """
     if not dataset_name:
-        raise ValueError("必须选择一个数据集。")
+        return "⚠️ 请先选择一个数据集再预览提示词。\n\n📝 使用说明：\n1. 在左侧面板选择一个数据集\n2. 选择合适的提示词模板\n3. 调整对话轮数和生成数量\n4. 点击此按钮预览最终提示词"
 
     # 1. Get dataset details, which includes linked character and scenarios
-    dataset = dataset_service.get_dataset_details(dataset_name)
-    if not dataset:
-        raise ValueError(f"未找到数据集: {dataset_name}")
+    try:
+        dataset = dataset_service.get_dataset_details(dataset_name)
+        if not dataset:
+            return f"❌ 错误：未找到数据集 '{dataset_name}'。请检查数据集是否存在。"
 
-    character_name = dataset.get("character_name")
-    if not character_name:
-        raise ValueError(f"数据集 '{dataset_name}' 未绑定任何角色。")
+        character_name = dataset.get("character_name")
+        if not character_name:
+            return f"❌ 错误：数据集 '{dataset_name}' 未绑定任何角色。请先为数据集配置角色。"
 
-    # 2. Get full character details
-    character = character_service.get_character_by_name(character_name)
-    if not character:
-        raise ValueError(f"未找到角色详情: {character_name}")
+        # 2. Get full character details
+        character = character_service.get_character_by_name(character_name)
+        if not character:
+            return f"❌ 错误：未找到角色详情 '{character_name}'。请检查角色是否存在。"
 
-    # 3. Get scenario details and format them into a list string
-    scenarios = dataset.get("scenario_objects", [])
-    scenarios_list_str = "\n".join(
-        f"- {s['name']}: {s['description'].replace('{{char}}', character_name)}"
-        for s in scenarios
-    )
-    if not scenarios_list_str:
-        scenarios_list_str = "General conversation without specific scenarios."
+        # 3. Get scenario details and format them into a list string
+        scenarios = dataset.get("scenario_objects", [])
+        scenarios_list_str = "\n".join(
+            f"- {s['name']}: {s['description'].replace('{{char}}', character_name)}"
+            for s in scenarios
+        )
+        if not scenarios_list_str:
+            scenarios_list_str = "General conversation without specific scenarios."
 
-    # 4. Read the template
-    template = read_prompt_template()
+        # 4. Read the template with specified path
+        template = read_prompt_template(template_path)
 
-    # 5. Substitute the template with data
-    prompt_data = {
-        "character_name": character.get("name", ""),
-        "character_personality": character.get("personality", ""),
-        "character_background": character.get("background", ""),
-        "character_speaking_style": character.get("speaking_style", ""),
-        "conversation_turns": conversation_turns,
-        "scenarios_list": scenarios_list_str,
-        "dialogue_examples": character.get("dialogue_examples", "N/A"),
-        "num_to_generate": num_to_generate,
-    }
+        # 5. Substitute the template with data
+        prompt_data = {
+            "character_name": character.get("name", ""),
+            "character_personality": character.get("personality", ""),
+            "character_background": character.get("background", ""),
+            "character_speaking_style": character.get("speaking_style", ""),
+            "conversation_turns": conversation_turns,
+            "scenarios_list": scenarios_list_str,
+            "dialogue_examples": character.get("dialogue_examples", "N/A"),
+            "num_to_generate": num_to_generate,
+        }
 
-    final_prompt = template.substitute(prompt_data)
-    return final_prompt
+        final_prompt = template.substitute(prompt_data)
+        return final_prompt
+
+    except Exception as e:
+        logger.error(f"生成预览提示词时发生错误: {e}")
+        return f"❌ 生成预览时发生错误：{str(e)}\n\n请检查：\n- 数据集是否正确配置\n- 角色信息是否完整\n- 场景设置是否正确\n- 模板文件是否存在"
 
 
 async def call_openai_structured(
@@ -258,6 +294,7 @@ async def generate_corpus_batch(
     top_p: float = 1.0,
     frequency_penalty: float = 0.5,
     presence_penalty: float = 0.5,
+    template_path: str = "templates/prompts/generation_prompt.txt",
     progress_callback=None,
 ) -> GenerationBatch:
     """异步批量生成语料数据"""
@@ -275,7 +312,7 @@ async def generate_corpus_batch(
     # 生成基础提示词
     batch_size = total_count // parallel_requests
     base_prompt = generate_preview_prompt(
-        dataset_name, conversation_turns, batch_size
+        dataset_name, conversation_turns, batch_size, template_path
     )  # 模板中用1，后续会替换
 
     # 创建批次信息

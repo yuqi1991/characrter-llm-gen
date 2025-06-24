@@ -112,9 +112,29 @@ def create_generation_ui():
             gr.Warning(str(e))
             return gr.update(choices=[], interactive=True)
 
+    def load_prompt_templates():
+        """加载提示词模板列表"""
+        try:
+            templates = llm_service.get_prompt_templates()
+            choices = [template["name"] for template in templates]
+            template_map = {
+                template["name"]: template["path"] for template in templates
+            }
+            return (
+                gr.update(choices=choices, value=choices[0] if choices else None),
+                template_map,
+            )
+        except Exception as e:
+            gr.Warning(f"加载模板列表失败: {e}")
+            return gr.update(choices=["默认模板"], value="默认模板"), {
+                "默认模板": "templates/prompts/generation_prompt.txt"
+            }
+
     def load_datasets():
+        """加载数据集列表"""
         datasets = dataset_service.get_all_datasets_for_display()
-        return gr.update(choices=[d["name"] for d in datasets], interactive=True)
+        choices = [ds["name"] for ds in datasets]
+        return gr.update(choices=choices)
 
     def start_generation(
         dataset_name,
@@ -128,6 +148,8 @@ def create_generation_ui():
         top_p,
         frequency_penalty,
         presence_penalty,
+        template_name,
+        template_map,
     ):
         """开始生成语料"""
         if not all([dataset_name, api_config_name, model_name]):
@@ -135,9 +157,15 @@ def create_generation_ui():
             return "请完善生成配置", gr.update(), None
 
         try:
+            # 获取模板路径
+            template_path = template_map.get(
+                template_name, "templates/prompts/generation_prompt.txt"
+            )
+
             # 显示开始信息
             progress_msg = f"开始生成 {num_to_generate} 条语料...\n"
             progress_msg += f"数据集: {dataset_name}\n"
+            progress_msg += f"模板: {template_name}\n"
             progress_msg += f"API配置: {api_config_name}\n"
             progress_msg += f"模型: {model_name}\n"
             progress_msg += f"并行请求数: {parallel_requests}\n"
@@ -160,6 +188,7 @@ def create_generation_ui():
                         top_p=top_p,
                         frequency_penalty=frequency_penalty,
                         presence_penalty=presence_penalty,
+                        template_path=template_path,
                     )
                 )
 
@@ -272,6 +301,7 @@ def create_generation_ui():
     with gr.Blocks(analytics_enabled=False) as generation_ui:
         selected_config_name_state = gr.State(None)
         current_batch_state = gr.State(None)  # 存储当前生成批次的状态
+        template_map_state = gr.State({})  # 存储模板名称到路径的映射
 
         with gr.Row():
             with gr.Column(scale=1):
@@ -377,11 +407,22 @@ def create_generation_ui():
                 with gr.Group():
                     with gr.Tabs():
                         with gr.TabItem("📝 最终提示词预览"):
+                            with gr.Row():
+                                template_selector = gr.Dropdown(
+                                    label="🎯 选择提示词模板",
+                                    choices=[],
+                                    value=None,
+                                    info="选择不同风格的提示词模板",
+                                    scale=3,
+                                )
+                                refresh_templates_btn = gr.Button(
+                                    "🔄", scale=1, min_width=50
+                                )
                             prompt_preview = gr.TextArea(
                                 label="生成的提示词将显示在这里",
                                 lines=20,
                                 interactive=True,
-                                placeholder='选择好参数后，点击"生成/刷新提示词"按钮进行预览。',
+                                placeholder='选择好参数和模板后，点击"生成/刷新提示词"按钮进行预览。',
                             )
                     with gr.Row():
                         generate_prompt_btn = gr.Button("⚙️ 生成/刷新提示词")
@@ -433,17 +474,32 @@ def create_generation_ui():
             presence_penalty,
         ]
 
-        # On page load, load datasets, configs, and explicitly enable all sliders
+        # On page load, load datasets, configs, templates, and explicitly enable all sliders
         def initial_load():
             datasets_update = load_datasets()
             configs_update, configs_df_update = refresh_all_configs()
+            templates_update, template_map = load_prompt_templates()
             # Return update for each slider to ensure they are interactive
             slider_updates = [gr.update(interactive=True)] * len(all_sliders)
-            return datasets_update, configs_update, configs_df_update, *slider_updates
+            return (
+                datasets_update,
+                configs_update,
+                configs_df_update,
+                templates_update,
+                template_map,
+                *slider_updates,
+            )
 
         generation_ui.load(
             initial_load,
-            outputs=[target_dataset, api_config, api_config_list, *all_sliders],
+            outputs=[
+                target_dataset,
+                api_config,
+                api_config_list,
+                template_selector,
+                template_map_state,
+                *all_sliders,
+            ],
         )
 
         # Main API Config Dropdown Event
@@ -495,10 +551,40 @@ def create_generation_ui():
             [api_config, api_config_list],
         )
 
+        # Event for refreshing templates
+        refresh_templates_btn.click(
+            load_prompt_templates, outputs=[template_selector, template_map_state]
+        )
+
         # Event for the "Generate Preview" button
+        def generate_preview_with_template(
+            dataset_name,
+            conversation_turns,
+            num_to_generate,
+            template_name,
+            template_map,
+        ):
+            if not template_name or not template_map:
+                return llm_service.generate_preview_prompt(
+                    dataset_name, conversation_turns, num_to_generate
+                )
+
+            template_path = template_map.get(
+                template_name, "templates/prompts/generation_prompt.txt"
+            )
+            return llm_service.generate_preview_prompt(
+                dataset_name, conversation_turns, num_to_generate, template_path
+            )
+
         generate_prompt_btn.click(
-            fn=llm_service.generate_preview_prompt,
-            inputs=[target_dataset, conversation_turns, num_to_generate],
+            fn=generate_preview_with_template,
+            inputs=[
+                target_dataset,
+                conversation_turns,
+                num_to_generate,
+                template_selector,
+                template_map_state,
+            ],
             outputs=[prompt_preview],
         )
 
@@ -517,6 +603,8 @@ def create_generation_ui():
                 top_p,
                 frequency_penalty,
                 presence_penalty,
+                template_selector,
+                template_map_state,
             ],
             outputs=[generation_status, results_preview, current_batch_state],
         )
