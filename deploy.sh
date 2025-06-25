@@ -87,8 +87,8 @@ deploy_docker() {
     # 启动新容器
     print_info "🚀 启动容器..."
     docker run -d \
-        --name "$container_name" \
-        -p "${port}:7860" \
+        --name character-llm-gen \
+        --network host \
         -v "$(pwd)/data:/app/data" \
         -v "$(pwd)/logs:/app/logs" \
         -v "$(pwd)/export:/app/export" \
@@ -261,7 +261,7 @@ clean_up() {
         
         # 删除镜像
         docker rmi character-llm-gen:local || true
-        docker rmi ghcr.io/YOUR_USERNAME/character-llm-gen:latest || true
+        docker rmi ghcr.io/yuqi1991/character-llm-gen:latest || true
         
         # 清理 Docker Compose
         if [ -f "docker-compose.yml" ]; then

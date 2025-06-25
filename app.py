@@ -6,6 +6,8 @@ from src.ui.character_ui import create_character_ui
 from src.ui.scenario_ui import create_scenario_ui
 from src.ui.dataset_ui import create_dataset_ui
 from src.ui.generation_ui import create_generation_ui
+from src.ui.prompt_ui import create_prompt_ui
+
 
 # Configure basic logging
 logging.basicConfig(
@@ -139,6 +141,9 @@ def main():
 
             with gr.TabItem("🏞️ 场景标签管理", id="scenario_tab"):
                 create_scenario_ui()
+
+            with gr.TabItem("📝 提示词模板管理", id="prompt_tab"):
+                create_prompt_ui()
 
             with gr.TabItem("📚 语料数据集管理", id="dataset_tab"):
                 create_dataset_ui()
