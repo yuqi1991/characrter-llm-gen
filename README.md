@@ -1,8 +1,8 @@
 
 # Character LLM Dataset Generator
 
-[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-character--llm--gen-blue)](https://ghcr.io/yuqi1991/character-llm-gen)
-[![GitHub release](https://img.shields.io/github/release/yuqi1991/character-llm-gen.svg)](https://github.com/yuqi1991/character-llm-gen/releases)
+[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-character--llm--gen-blue)](https://ghcr.io/yuqi1991/characrter-llm-gen)
+[![GitHub release](https://img.shields.io/github/release/yuqi1991/character-llm-gen.svg)](https://github.com/yuqi1991/characrter-llm-gen/releases)
 
 一个基于 Gradio WebUI 的智能语料生成和管理工具，专为角色扮演LLM微调数据集制作而设计。
 
