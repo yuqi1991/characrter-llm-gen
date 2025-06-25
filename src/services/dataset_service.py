@@ -239,6 +239,60 @@ def get_dataset_stats(dataset_id):
         session.close()
 
 
+def delete_corpus_by_scenarios(dataset_id: int, scenario_names: list[str]) -> int:
+    """
+    Deletes corpus entries from a dataset that are associated with specific scenarios.
+
+    Args:
+        dataset_id: The ID of the dataset.
+        scenario_names: A list of scenario names to delete corpus for.
+
+    Returns:
+        The number of deleted corpus entries.
+    """
+    if not dataset_id or not scenario_names:
+        return 0
+
+    session = db_manager.get_session()
+    try:
+        # Find scenarios to get their IDs
+        scenarios = (
+            session.query(Scenario).filter(Scenario.name.in_(scenario_names)).all()
+        )
+        if not scenarios:
+            return 0
+
+        # Find all corpus entries linked to these scenarios within the dataset
+        corpus_to_delete = (
+            session.query(Corpus)
+            .filter(Corpus.dataset_id == dataset_id)
+            .join(Corpus.scenarios)
+            .filter(Scenario.name.in_(scenario_names))
+            .all()
+        )
+
+        deleted_count = len(corpus_to_delete)
+        if deleted_count > 0:
+            for corpus_entry in corpus_to_delete:
+                session.delete(corpus_entry)
+            session.commit()
+            logger.info(
+                f"Deleted {deleted_count} corpus entries from dataset {dataset_id} "
+                f"for scenarios: {scenario_names}"
+            )
+        return deleted_count
+    except Exception as e:
+        session.rollback()
+        logger.error(
+            f"Error deleting corpus for dataset {dataset_id} "
+            f"and scenarios {scenario_names}: {e}",
+            exc_info=True,
+        )
+        raise
+    finally:
+        session.close()
+
+
 def save_corpus_to_dataset(
     dataset_name: str, dialogue_data: dict, scenario_names: list
 ) -> int:

@@ -14,12 +14,11 @@ def create_dataset_ui():
         dataset_names = [d["name"] for d in datasets]
         characters = character_service.get_all_characters()
         character_names = [c["name"] for c in characters]
-        scenarios = scenario_service.get_all_scenarios()
-        scenario_names = [s["name"] for s in scenarios]
+        # 初始时场景选择框为空，需要先选择角色
         return (
             gr.update(choices=dataset_names),
             gr.update(choices=character_names),
-            gr.update(choices=scenario_names),
+            gr.update(choices=[], value=[]),  # 空的场景选择框
         )
 
     def format_dialogue(dialogue):
@@ -198,6 +197,39 @@ def create_dataset_ui():
     def on_add_new_dataset():
         return None, "", "", None, []
 
+    def on_character_change_in_dataset(character_name):
+        """当角色下拉菜单变化时，更新场景多选框的选项"""
+        if not character_name:
+            return gr.update(choices=[], value=[])
+
+        # NOTE: 这耦合了两个服务，但为了UI的响应性是值得的
+        character = character_service.get_character_by_name(character_name)
+        if character:
+            scenarios = scenario_service.get_scenarios_by_character(character["id"])
+            scenario_names = [s["name"] for s in scenarios]
+            return gr.update(choices=scenario_names, value=[])
+        return gr.update(choices=[], value=[])
+
+    def on_delete_corpus_by_scenario(dataset_id, scenarios_to_delete):
+        """处理按场景删除语料的按钮点击事件"""
+        if not dataset_id:
+            gr.Warning("请先选择一个数据集！")
+            return gr.update(), gr.update(), gr.update()
+        if not scenarios_to_delete:
+            gr.Warning("请至少选择一个要删除语料的场景！")
+            return gr.update(), gr.update(), gr.update()
+
+        try:
+            deleted_count = dataset_service.delete_corpus_by_scenarios(
+                dataset_id, scenarios_to_delete
+            )
+            gr.Info(f"成功删除了 {deleted_count} 条语料。")
+            # Refresh corpus view and stats
+            return update_corpus_view(dataset_id, [])
+        except Exception as e:
+            gr.Warning(f"删除语料失败: {e}")
+            return gr.update(), gr.update(), gr.update()
+
     with gr.Blocks(analytics_enabled=False) as dataset_ui:
         gr.Markdown("## 📚 语料数据集管理\n管理和配置用于生成任务的数据集。")
         with gr.Row():
@@ -234,7 +266,10 @@ def create_dataset_ui():
                 gr.Markdown("### 数据集预览与统计")
                 with gr.Row():
                     filter_by_scenario_dropdown = gr.Dropdown(
-                        label="按场景筛选预览", multiselect=True
+                        label="按场景筛选预览", multiselect=True, scale=4
+                    )
+                    delete_corpus_by_scenario_btn = gr.Button(
+                        "🗑️ 删除选中场景的语料", variant="stop", scale=1
                     )
                 corpus_preview_df = gr.Dataframe(
                     headers=["dialogue", "scenarios"],
@@ -266,6 +301,13 @@ def create_dataset_ui():
             inputs=[dataset_dropdown],
             outputs=[*outputs_left_panel, *outputs_right_panel],
         )
+
+        character_dropdown.change(
+            fn=on_character_change_in_dataset,
+            inputs=[character_dropdown],
+            outputs=[scenario_multiselect],
+        )
+
         add_btn.click(fn=on_add_new_dataset, outputs=outputs_left_panel)
         save_btn.click(
             fn=on_save_dataset,
@@ -295,6 +337,16 @@ def create_dataset_ui():
             fn=update_corpus_view,
             inputs=[selected_dataset_id_state, filter_by_scenario_dropdown],
             outputs=outputs_right_panel,
+        )
+
+        delete_corpus_by_scenario_btn.click(
+            fn=on_delete_corpus_by_scenario,
+            inputs=[selected_dataset_id_state, filter_by_scenario_dropdown],
+            outputs=[
+                corpus_preview_df,
+                stats_display,
+                filter_by_scenario_dropdown,
+            ],
         )
 
     return dataset_ui

@@ -9,6 +9,7 @@ from sqlalchemy import (
     Table,
     JSON,
     Float,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
@@ -27,6 +28,10 @@ class Character(Base):
     speaking_style = Column(Text)
     dialogue_examples = Column(Text)
 
+    scenarios = relationship(
+        "Scenario", back_populates="character", cascade="all, delete-orphan"
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -38,11 +43,18 @@ class Scenario(Base):
     __tablename__ = "scenarios"
 
     id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
+    name = Column(String, nullable=False)
     description = Column(Text)  # This will store the prompt template
+
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    character = relationship("Character", back_populates="scenarios")
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("name", "character_id", name="_character_scenario_uc"),
+    )
 
     def __repr__(self):
         return f"<Scenario(id={self.id}, name='{self.name}')>"
