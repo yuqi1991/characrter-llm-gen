@@ -119,8 +119,8 @@ def generate_preview_prompt(
         # 3. Get scenario details and format them into a list string
         scenarios = dataset.get("scenario_objects", [])
         scenarios_list_str = "\n".join(
-            f"- {s['name']}: {s['description'].replace('{{char}}', character_name)}"
-            for s in scenarios
+            f"\n- {i+1}. {s['name']}:\n {s['description'].replace('{{char}}', character_name)}"
+            for i, s in enumerate(scenarios)
         )
         if not scenarios_list_str:
             scenarios_list_str = "General conversation without specific scenarios."
@@ -339,6 +339,7 @@ async def generate_corpus_batch(
             frequency_penalty=frequency_penalty,
             presence_penalty=presence_penalty,
         )
+        await asyncio.sleep(1)  # 防止请求过于频繁
         tasks.append(task)
         logger.info(f"生成任务 {i+1} 已添加: 请求生成{num_to_generate} 条语料")
         if i % max_parallel_requests == 0:

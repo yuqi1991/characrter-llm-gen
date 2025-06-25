@@ -322,7 +322,7 @@ def create_generation_ui():
                         value=10,
                     )
                     conversation_turns = gr.Slider(
-                        label="每条语料对话轮数", minimum=1, maximum=20, step=1, value=3
+                        label="每条语料对话轮数", minimum=1, maximum=20, step=1, value=5
                     )
                     total_requests = gr.Slider(
                         label="总请求数量",
@@ -336,7 +336,7 @@ def create_generation_ui():
                         minimum=1,
                         maximum=20,
                         step=1,
-                        value=1,
+                        value=10,
                         info="同时发送给LLM的请求数量",
                     )
                     batch_cooldown_seconds = gr.Slider(
@@ -344,7 +344,7 @@ def create_generation_ui():
                         minimum=1,
                         maximum=30,
                         step=1,
-                        value=0,
+                        value=5,
                         info="每批请求之间的冷却时间，单位秒，避免被封号",
                     )
 
