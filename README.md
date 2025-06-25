@@ -1,6 +1,9 @@
 
 # Character LLM Dataset Generator
 
+[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-character--llm--gen-blue)](https://ghcr.io/yuqi1991/character-llm-gen)
+[![GitHub release](https://img.shields.io/github/release/yuqi1991/character-llm-gen.svg)](https://github.com/yuqi1991/character-llm-gen/releases)
+
 一个基于 Gradio WebUI 的智能语料生成和管理工具，专为角色扮演LLM微调数据集制作而设计。
 
 ## 🎯 项目简介
@@ -27,15 +30,20 @@
 #### 方式一：Docker 部署（推荐）
 
 ```bash
-# 克隆项目
+# 方式1: 使用预构建镜像（推荐）
+docker run -d \
+  --name character-llm-gen \
+  -p 7860:7860 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/export:/app/export \
+  ghcr.io/YOUR_USERNAME/character-llm-gen:latest
+
+# 方式2: 使用 Docker Compose
 git clone https://github.com/your-username/character-llm-gen.git
 cd character-llm-gen
-
-# 使用 Docker Compose 一键启动
+# 编辑 docker-compose.yml，将 image 改为 GHCR 地址
 docker-compose up -d
-
-# 查看日志
-docker-compose logs -f
 ```
 
 访问 http://localhost:7860 即可使用应用。
@@ -166,8 +174,4 @@ character,scenario,conversation,quality_score,created_at
 - **数据库**：SQLite
 - **LLM接口**：OpenAI API（Google AI API、Anthropic API日后支持）
 
-
-
-## 语料结构化结果生成格式定义
-请参考[RESULT_FORMAT.md](RESULT_FORMAT.md)文件
 

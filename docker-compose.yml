@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   character-llm-gen:
-    build: .
+    # 使用 GHCR 预构建镜像
+    image: ghcr.io/YOUR_USERNAME/character-llm-gen:latest
+    # 如果需要本地构建，注释上面一行并取消注释下面一行
+    # build: .
     container_name: character-llm-gen
     ports:
       - "7860:7860"
