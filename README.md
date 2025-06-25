@@ -24,16 +24,35 @@
 
 ### 安装步骤
 
+#### 方式一：Docker 部署（推荐）
+
+```bash
+# 克隆项目
+git clone https://github.com/your-username/character-llm-gen.git
+cd character-llm-gen
+
+# 使用 Docker Compose 一键启动
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+```
+
+访问 http://localhost:7860 即可使用应用。
+
+详细的 Docker 部署指南请参考 [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)。
+
+#### 方式二：本地开发环境
+
 ```bash
 # 克隆项目
 git clone https://github.com/your-username/character-llm-gen.git
 cd character-llm-gen
 
 # 配置虚拟环境
-pyenv install 3.9.9
-pyenv virtualenv 3.9.9 char_gen
+pyenv install 3.11.4
+pyenv virtualenv 3.11.4 char_gen
 pyenv activate char_gen
-
 
 # 安装依赖
 pip install -r requirements.txt
