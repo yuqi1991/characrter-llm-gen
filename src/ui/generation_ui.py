@@ -152,18 +152,19 @@ def create_generation_ui():
         presence_penalty,
         template_name,
         template_map,
+        prompt_content,
     ):
         """开始生成语料"""
         if not all([dataset_name, api_config_name, model_name]):
             gr.Warning("请确保已选择数据集、API配置和模型！")
             return "请完善生成配置", gr.update(), None
 
-        try:
-            # 获取模板路径
-            template_path = template_map.get(
-                template_name, "templates/prompts/generation_prompt.txt"
-            )
+        # 验证提示词内容
+        if not prompt_content or prompt_content.strip() == "":
+            gr.Warning("提示词内容为空！请先点击'生成/刷新提示词'按钮生成提示词。")
+            return "提示词内容为空", gr.update(), None
 
+        try:
             # 显示开始信息
             progress_msg = f"开始生成 {num_to_generate} 条语料...\n"
             progress_msg += f"数据集: {dataset_name}\n"
@@ -171,6 +172,7 @@ def create_generation_ui():
             progress_msg += f"API配置: {api_config_name}\n"
             progress_msg += f"模型: {model_name}\n"
             progress_msg += f"并行请求数: {max_parallel_requests}\n"
+            progress_msg += "使用预览框中的提示词内容进行生成\n"
 
             # 运行异步生成任务
             loop = asyncio.new_event_loop()
@@ -192,7 +194,7 @@ def create_generation_ui():
                         top_p=top_p,
                         frequency_penalty=frequency_penalty,
                         presence_penalty=presence_penalty,
-                        template_path=template_path,
+                        prompt_content=prompt_content,
                     )
                 )
 
@@ -442,10 +444,11 @@ def create_generation_ui():
                                     "🔄", scale=1, min_width=50
                                 )
                             prompt_preview = gr.TextArea(
-                                label="生成的提示词将显示在这里",
+                                label="最终提示词（可编辑）",
                                 lines=20,
                                 interactive=True,
-                                placeholder='选择好参数和模板后，点击"生成/刷新提示词"按钮进行预览。',
+                                placeholder='选择好参数和模板后，点击"生成/刷新提示词"按钮进行预览。您可以在此处直接编辑提示词内容，系统将使用您编辑后的内容进行生成。',
+                                info="💡 提示：您可以在此处手动微调提示词内容，系统将使用您最终编辑的内容进行语料生成",
                             )
                     with gr.Row():
                         generate_prompt_btn = gr.Button("⚙️ 生成/刷新提示词")
@@ -632,6 +635,7 @@ def create_generation_ui():
                 presence_penalty,
                 template_selector,
                 template_map_state,
+                prompt_preview,
             ],
             outputs=[generation_status, results_preview, current_batch_state],
         )

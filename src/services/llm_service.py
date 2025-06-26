@@ -297,7 +297,7 @@ async def generate_corpus_batch(
     top_p: float = 1.0,
     frequency_penalty: float = 0.5,
     presence_penalty: float = 0.5,
-    template_path: str = "templates/prompts/generation_prompt.txt",
+    prompt_content: str = None,
     progress_callback=None,
 ) -> GenerationBatch:
     """异步批量生成语料数据"""
@@ -312,10 +312,12 @@ async def generate_corpus_batch(
     if not dataset:
         raise ValueError(f"数据集 '{dataset_name}' 不存在")
 
-    # 生成基础提示词
-    base_prompt = generate_preview_prompt(
-        dataset_name, conversation_turns, num_to_generate, template_path
-    )  # 模板中用1，后续会替换
+    # 验证提示词内容
+    if not prompt_content or prompt_content.strip() == "":
+        raise ValueError("提示词内容不能为空")
+
+    # 使用传入的提示词内容
+    base_prompt = prompt_content
 
     # 创建批次信息
     batch = GenerationBatch(
