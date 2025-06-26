@@ -62,6 +62,7 @@
 1. 在`templates/prompts/`目录下创建新的`.txt`文件
 2. 使用现有模板作为参考，保持变量占位符格式：
    - `${character_name}` - 角色名称
+   - `${character_description}` - 角色介绍
    - `${character_personality}` - 性格特征
    - `${character_background}` - 背景故事
    - `${character_speaking_style}` - 说话风格

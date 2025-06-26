@@ -131,6 +131,7 @@ def generate_preview_prompt(
         # 5. Substitute the template with data
         prompt_data = {
             "character_name": character.get("name", ""),
+            "character_description": character.get("description", ""),
             "character_personality": character.get("personality", ""),
             "character_background": character.get("background", ""),
             "character_speaking_style": character.get("speaking_style", ""),

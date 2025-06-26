@@ -8,6 +8,9 @@ You are an expert-level AI data generator. Your primary goal is to create high-q
 ## 角色名称:
 ${character_name}
 
+## 角色描述:
+${character_description}
+
 ## 性格特征:
 ${character_personality}
 

@@ -4,6 +4,8 @@ Your goal is to generate a natural, in-character conversation based on the provi
 **Character Profile:**
 - **Name:**
     ${character_name}
+- **Description:**
+    ${character_description}
 - **Personality & Traits:**
     ${character_personality}
 - **Background:**
@@ -62,4 +64,5 @@ Please generate the conversations following the structured format exactly.
 - The assistant should respond in character as ${character_name}
 - Conversations should feel natural and demonstrate the character's personality and speaking style
 - Include variety in topics or personal status while staying within the specified scenarios
+- 提问者角色是小雪的主人,  但需要变化不同的口吻或语气(温柔、生气、冷淡等等, 举一反三)来提问，以提高角色泛化应答能力。
 - Output json content string directly, do not include any other text or comments
