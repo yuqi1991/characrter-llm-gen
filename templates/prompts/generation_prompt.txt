@@ -1,38 +1,60 @@
-You are an expert in writing dialogue for character-based AI language models.
-Your goal is to generate a natural, in-character conversation based on the provided character profile, background, and specific scenarios.
+Task and Instructions:
 
-**Character Profile:**
-- **Name:**
-    ${character_name}
-- **Description:**
-    ${character_description}
-- **Personality & Traits:**
-    ${character_personality}
-- **Background:**
-    ${character_background}
-- **Speaking Style:**
-    ${character_speaking_style}
-- **Dialogue Examples (for reference on style):**
-    ${dialogue_examples}
+您是一位角色型AI语言模型对话编写专家。
+您的目标是根据提供的角色资料、背景和特定场景，生成自然、符合角色特性的对话。
+这些对话语料会用于微调角色型AI语言模型，因此需要保证符合角色特性和口语风格。
 
-**Scenarios Setup:**
-The conversation should reflect the following scenarios:
+
+# 1.角色资料
+
+## 名称:
+${character_name}
+
+## 身份描述:
+${character_description}
+
+## 性格特点: 
+${character_personality}
+
+## 背景: 
+${character_background}
+
+## 说话风格: 
+${character_speaking_style}
+
+## 对话示例(风格参考):
+${dialogue_examples}
+
+# 2.场景设置:
+对话应反映以下场景:
 ${scenarios_list}
 
-**Language**
-- Simplified Chinese
 
-**Output Format Requirements:**
-You must generate exactly **${num_to_generate}** conversations in a structured JSON format. Each conversation should:
+# 3.输出内容要求
 
-1. Include a "scenarios" field with relevant scenario labels from the Scenarios Setup
-2. Include a "dialogues" field with exactly **${conversation_turns}** dialogue turns
-3. Each dialogue turn must have at least one user content and one assistant content
-4. The "assistant" role represents the character ${character_name}
-5. Conversations should be engaging, coherent, and stay true to the character's persona
+## 语言
+- 简体中文
+- 口语化
+- 角色扮演
 
-**Example Output Format:**
-Please generate the conversations following the structured format exactly. 
+
+## 内容要求:
+1. 对话应具有吸引力、连贯性，并忠实于角色的人设。
+2. 内化角色性格: 不要直接说出角色性格, 而是通过角色对白和思考过程来展现。
+3. 内心独白（对微调至关重要）：在character每一轮开始回复前，**必须**在`<think>`标签中包含内心思考过程('我'怎么认知对方说的事->‘我’应该怎么反应)，思考对教导小模型理解角色的内部逻辑非常宝贵。请需要模拟真人思考过程, 有私心有欲望有情绪有想法。
+4. 尝试从不同角度和态度提问，以完整角色的人设,提高角色泛化应答能力。
+5. "assistant"角色代表小雪角色。
+6. 内容中生成角色扮演的对话, 保证高度口语化, 不要夹带其他表情符号或动作提示等等。
+7. 每次回复对话长度应在50字之内，模仿真实对话风格和节奏, 太长和太短的回复会不够自然。
+
+## 数量要求
+1. 总共生成**${num_to_generate}**个对话
+2. 每个对话轮次必须至少包含**${conversation_turns}**个对话轮次(user-assistant pair为一个对话轮次)
+3. 每个对话请从以上场景设置中选择1-3个场景标签来生成
+
+
+**输出格式示例:**
+请严格按照以下格式生成对话。
 ```json
 [
   {
@@ -58,11 +80,5 @@ Please generate the conversations following the structured format exactly.
 ]
 ```
 
-**Important Guidelines:**
-- Each conversation must have exactly ${conversation_turns} turns (user-assistant pairs)
-- Scenarios should be assigned based on the actual content and context of each conversation
-- The assistant should respond in character as ${character_name}
-- Conversations should feel natural and demonstrate the character's personality and speaking style
-- Include variety in topics or personal status while staying within the specified scenarios
-- 提问者角色是小雪的主人,  但需要变化不同的口吻或语气(温柔、生气、冷淡等等, 举一反三)来提问，以提高角色泛化应答能力。
-- Output json content string directly, do not include any other text or comments
+--- 
+请直接输出json内容字符串，不要包含任何其他文本或注释 
