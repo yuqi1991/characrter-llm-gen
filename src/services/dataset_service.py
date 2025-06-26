@@ -489,8 +489,17 @@ def _prepare_export_dir():
     """Prepares the export directory by cleaning and recreating it."""
     try:
         if os.path.exists(EXPORT_DIR):
-            shutil.rmtree(EXPORT_DIR)
-        os.makedirs(EXPORT_DIR, exist_ok=True)
+            for file in os.listdir(EXPORT_DIR):
+                file_path = os.path.join(EXPORT_DIR, file)
+                try:
+                    if os.path.isfile(file_path):
+                        os.unlink(file_path)
+                    elif os.path.isdir(file_path):
+                        shutil.rmtree(file_path)
+                except Exception as e:
+                    logger.error(f"删除文件 {file_path} 失败: {e}")
+        else:
+            os.makedirs(EXPORT_DIR, exist_ok=True)
         logger.info(f"Export directory '{EXPORT_DIR}' prepared.")
     except Exception as e:
         logger.error(f"Failed to prepare export directory: {e}")
