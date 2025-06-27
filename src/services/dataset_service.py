@@ -685,3 +685,217 @@ def export_dataset_corpus_to_standard_format(dataset_id: int) -> str:
 
 # TODO: Implement dataset service functions here.
 # - get_dataset_stats(dataset_id)
+
+
+def detect_invalid_corpus_data(dataset_id: int = None) -> dict:
+    """
+    检测数据集中不合规范的语料数据
+
+    Args:
+        dataset_id: 数据集ID，如果为None则检测所有数据集
+
+    Returns:
+        包含检测结果的字典，格式为：
+        {
+            "total_checked": int,
+            "invalid_entries": [
+                {
+                    "corpus_id": int,
+                    "dataset_name": str,
+                    "issues": [str],  # 问题描述列表
+                    "dialogue_sample": str  # 问题数据样本
+                }
+            ]
+        }
+    """
+    session = db_manager.get_session()
+    try:
+        # 构建查询
+        query = session.query(Corpus).options(joinedload(Corpus.dataset))
+        if dataset_id:
+            query = query.filter(Corpus.dataset_id == dataset_id)
+
+        corpus_entries = query.all()
+
+        invalid_entries = []
+        total_checked = len(corpus_entries)
+
+        for entry in corpus_entries:
+            issues = []
+            dialogue_sample = ""
+
+            try:
+                dialogue_data = entry.dialogue
+
+                # 检查dialogue_data是否为字典
+                if not isinstance(dialogue_data, dict):
+                    issues.append("dialogue字段不是字典类型")
+                    dialogue_sample = str(dialogue_data)[:100] + "..."
+                    invalid_entries.append(
+                        {
+                            "corpus_id": entry.id,
+                            "dataset_name": (
+                                entry.dataset.name if entry.dataset else "未知"
+                            ),
+                            "issues": issues,
+                            "dialogue_sample": dialogue_sample,
+                        }
+                    )
+                    continue
+
+                # 检查是否包含dialogues字段
+                if "dialogues" not in dialogue_data:
+                    issues.append("缺少dialogues字段")
+                else:
+                    dialogues = dialogue_data["dialogues"]
+
+                    # 检查dialogues是否为列表
+                    if not isinstance(dialogues, list):
+                        issues.append("dialogues字段不是列表类型")
+                    else:
+                        # 检查每个对话回合
+                        for i, turn in enumerate(dialogues):
+                            if not isinstance(turn, dict):
+                                issues.append(f"第{i+1}轮对话不是字典类型")
+                                continue
+
+                            # 检查role字段
+                            role = turn.get("role")
+                            if not role or not isinstance(role, str):
+                                issues.append(f"第{i+1}轮对话缺少有效的role字段")
+
+                            # 检查content字段
+                            content = turn.get("content")
+                            if content is None:
+                                issues.append(f"第{i+1}轮对话缺少content字段")
+                            elif isinstance(content, dict):
+                                issues.append(
+                                    f"第{i+1}轮对话的content是字典类型而非字符串"
+                                )
+                            elif not isinstance(content, str):
+                                issues.append(
+                                    f"第{i+1}轮对话的content不是字符串类型：{type(content)}"
+                                )
+
+                # 如果发现问题，记录这个条目
+                if issues:
+                    # 生成问题数据样本
+                    if isinstance(dialogue_data, dict) and "dialogues" in dialogue_data:
+                        sample_turns = dialogue_data["dialogues"][:2]  # 只取前两轮
+                        dialogue_sample = (
+                            json.dumps(sample_turns, ensure_ascii=False)[:200] + "..."
+                        )
+                    else:
+                        dialogue_sample = str(dialogue_data)[:100] + "..."
+
+                    invalid_entries.append(
+                        {
+                            "corpus_id": entry.id,
+                            "dataset_name": (
+                                entry.dataset.name if entry.dataset else "未知"
+                            ),
+                            "issues": issues,
+                            "dialogue_sample": dialogue_sample,
+                        }
+                    )
+
+            except Exception as e:
+                issues.append(f"数据解析异常: {str(e)}")
+                invalid_entries.append(
+                    {
+                        "corpus_id": entry.id,
+                        "dataset_name": entry.dataset.name if entry.dataset else "未知",
+                        "issues": issues,
+                        "dialogue_sample": str(entry.dialogue)[:100] + "...",
+                    }
+                )
+
+        logger.info(
+            f"检测完成：总共检查 {total_checked} 条语料，发现 {len(invalid_entries)} 条不合规范数据"
+        )
+
+        return {"total_checked": total_checked, "invalid_entries": invalid_entries}
+
+    finally:
+        session.close()
+
+
+def clean_invalid_corpus_data(dataset_id: int = None, dry_run: bool = True) -> dict:
+    """
+    清理数据集中不合规范的语料数据
+
+    Args:
+        dataset_id: 数据集ID，如果为None则清理所有数据集
+        dry_run: 是否为试运行模式，True时只检测不删除
+
+    Returns:
+        包含清理结果的字典，格式为：
+        {
+            "detected_count": int,
+            "deleted_count": int,
+            "dry_run": bool,
+            "deleted_corpus_ids": [int]
+        }
+    """
+    # 首先检测不合规范的数据
+    detection_result = detect_invalid_corpus_data(dataset_id)
+    invalid_entries = detection_result["invalid_entries"]
+
+    if not invalid_entries:
+        logger.info("未发现不合规范的语料数据")
+        return {
+            "detected_count": 0,
+            "deleted_count": 0,
+            "dry_run": dry_run,
+            "deleted_corpus_ids": [],
+        }
+
+    if dry_run:
+        logger.info(
+            f"试运行模式：发现 {len(invalid_entries)} 条不合规范数据，但不会删除"
+        )
+        return {
+            "detected_count": len(invalid_entries),
+            "deleted_count": 0,
+            "dry_run": True,
+            "deleted_corpus_ids": [],
+        }
+
+    # 执行删除操作
+    session = db_manager.get_session()
+    deleted_corpus_ids = []
+    deleted_count = 0
+
+    try:
+        corpus_ids_to_delete = [entry["corpus_id"] for entry in invalid_entries]
+
+        # 批量删除
+        for corpus_id in corpus_ids_to_delete:
+            try:
+                corpus_entry = (
+                    session.query(Corpus).filter(Corpus.id == corpus_id).first()
+                )
+                if corpus_entry:
+                    session.delete(corpus_entry)
+                    deleted_corpus_ids.append(corpus_id)
+                    deleted_count += 1
+            except Exception as e:
+                logger.error(f"删除语料ID {corpus_id} 时出错: {e}")
+                continue
+
+        session.commit()
+        logger.info(f"成功删除 {deleted_count} 条不合规范的语料数据")
+
+        return {
+            "detected_count": len(invalid_entries),
+            "deleted_count": deleted_count,
+            "dry_run": False,
+            "deleted_corpus_ids": deleted_corpus_ids,
+        }
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"批量删除语料数据时出错: {e}")
+        raise e
+    finally:
+        session.close()

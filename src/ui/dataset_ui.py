@@ -230,6 +230,128 @@ def create_dataset_ui():
             gr.Warning(f"删除语料失败: {e}")
             return gr.update(), gr.update(), gr.update()
 
+    def on_detect_invalid_data(dataset_id):
+        """检测不合规范的数据"""
+        if not dataset_id:
+            # 检测所有数据集
+            try:
+                result = dataset_service.detect_invalid_corpus_data()
+                total_checked = result["total_checked"]
+                invalid_count = len(result["invalid_entries"])
+
+                if invalid_count == 0:
+                    detection_info = f"✅ 检测完成：总共检查了 {total_checked} 条语料，**未发现**不合规范数据"
+                    detection_details = "所有数据格式正确！"
+                    return detection_info, detection_details, gr.update(visible=False)
+                else:
+                    detection_info = f"⚠️ 检测完成：总共检查了 {total_checked} 条语料，发现 **{invalid_count}** 条不合规范数据"
+
+                    # 构建详细信息
+                    details_lines = ["### 不合规范数据详情：\n"]
+                    for i, entry in enumerate(
+                        result["invalid_entries"][:10]
+                    ):  # 只显示前10条
+                        details_lines.append(f"**{i+1}. 语料ID: {entry['corpus_id']}**")
+                        details_lines.append(f"- 数据集: {entry['dataset_name']}")
+                        details_lines.append(f"- 问题: {', '.join(entry['issues'])}")
+                        details_lines.append(
+                            f"- 数据样本: `{entry['dialogue_sample'][:100]}...`"
+                        )
+                        details_lines.append("")
+
+                    if len(result["invalid_entries"]) > 10:
+                        details_lines.append(
+                            f"*...还有 {len(result['invalid_entries']) - 10} 条数据未显示*"
+                        )
+
+                    detection_details = "\n".join(details_lines)
+                    return detection_info, detection_details, gr.update(visible=True)
+
+            except Exception as e:
+                error_msg = f"❌ 检测失败: {str(e)}"
+                return error_msg, "", gr.update(visible=False)
+        else:
+            # 检测特定数据集
+            try:
+                result = dataset_service.detect_invalid_corpus_data(dataset_id)
+                total_checked = result["total_checked"]
+                invalid_count = len(result["invalid_entries"])
+
+                dataset_details = dataset_service.get_dataset_details_by_id(dataset_id)
+                dataset_name = (
+                    dataset_details["name"] if dataset_details else f"ID {dataset_id}"
+                )
+
+                if invalid_count == 0:
+                    detection_info = (
+                        f"✅ 数据集 '{dataset_name}' 检测完成：检查了 {total_checked} 条语料，"
+                        f"**未发现**不合规范数据"
+                    )
+                    detection_details = "该数据集所有数据格式正确！"
+                    return detection_info, detection_details, gr.update(visible=False)
+                else:
+                    detection_info = (
+                        f"⚠️ 数据集 '{dataset_name}' 检测完成：检查了 {total_checked} 条语料，"
+                        f"发现 **{invalid_count}** 条不合规范数据"
+                    )
+
+                    # 构建详细信息
+                    details_lines = ["### 不合规范数据详情：\n"]
+                    for i, entry in enumerate(
+                        result["invalid_entries"][:10]
+                    ):  # 只显示前10条
+                        details_lines.append(f"**{i+1}. 语料ID: {entry['corpus_id']}**")
+                        details_lines.append(f"- 问题: {', '.join(entry['issues'])}")
+                        details_lines.append(
+                            f"- 数据样本: `{entry['dialogue_sample'][:100]}...`"
+                        )
+                        details_lines.append("")
+
+                    if len(result["invalid_entries"]) > 10:
+                        details_lines.append(
+                            f"*...还有 {len(result['invalid_entries']) - 10} 条数据未显示*"
+                        )
+
+                    detection_details = "\n".join(details_lines)
+                    return detection_info, detection_details, gr.update(visible=True)
+
+            except Exception as e:
+                error_msg = f"❌ 检测失败: {str(e)}"
+                return error_msg, "", gr.update(visible=False)
+
+    def on_clean_invalid_data(dataset_id, dry_run):
+        """清理不合规范的数据"""
+        try:
+            result = dataset_service.clean_invalid_corpus_data(dataset_id, dry_run)
+            detected_count = result["detected_count"]
+            deleted_count = result["deleted_count"]
+
+            if detected_count == 0:
+                gr.Info("未发现需要清理的不合规范数据")
+                return "未发现需要清理的数据", gr.update(), gr.update(), gr.update()
+
+            if dry_run:
+                cleanup_info = f"🔍 试运行模式：发现 {detected_count} 条不合规范数据，如需删除请点击'确认清理'"
+                gr.Info(f"试运行完成：发现 {detected_count} 条不合规范数据")
+                return cleanup_info, gr.update(), gr.update(), gr.update()
+            else:
+                cleanup_info = f"✅ 清理完成：成功删除 {deleted_count}/{detected_count} 条不合规范数据"
+                gr.Info(f"清理完成：成功删除 {deleted_count} 条数据")
+
+                # 刷新语料预览和统计
+                if dataset_id:
+                    corpus_df, stats_md, scenario_filter_update = update_corpus_view(
+                        dataset_id, []
+                    )
+                    return cleanup_info, corpus_df, stats_md, scenario_filter_update
+                else:
+                    return cleanup_info, gr.update(), gr.update(), gr.update()
+
+        except Exception as e:
+            error_msg = f"❌ 清理失败: {str(e)}"
+            gr.Warning(f"清理失败: {str(e)}")
+            return error_msg, gr.update(), gr.update(), gr.update()
+
     with gr.Blocks(analytics_enabled=False) as dataset_ui:
         gr.Markdown("## 📚 语料数据集管理\n管理和配置用于生成任务的数据集。")
         with gr.Row():
@@ -261,6 +383,24 @@ def create_dataset_ui():
                     )
                     export_btn = gr.Button("📥 导出语料库", variant="secondary")
                     export_file = gr.File(label="下载文件", visible=False)
+
+                # 添加数据清理功能区域
+                gr.Markdown("### 数据质量管理")
+                with gr.Group():
+                    gr.Markdown("**检测和清理不合规范的语料数据**")
+                    with gr.Row():
+                        detect_btn = gr.Button("🔍 检测问题数据", variant="secondary")
+                        clean_dry_run_btn = gr.Button(
+                            "🧪 试运行清理", variant="secondary"
+                        )
+                        clean_confirm_btn = gr.Button("🗑️ 确认清理", variant="stop")
+
+                        # 检测结果显示
+                    detection_result = gr.Markdown(visible=True)
+                    detection_details = gr.Markdown(visible=True)
+
+                    # 清理结果显示
+                    cleanup_result = gr.Markdown(visible=True)
 
             with gr.Column(scale=2):
                 gr.Markdown("### 数据集预览与统计")
@@ -343,6 +483,35 @@ def create_dataset_ui():
             fn=on_delete_corpus_by_scenario,
             inputs=[selected_dataset_id_state, filter_by_scenario_dropdown],
             outputs=[
+                corpus_preview_df,
+                stats_display,
+                filter_by_scenario_dropdown,
+            ],
+        )
+
+        # 添加数据清理事件处理
+        detect_btn.click(
+            fn=on_detect_invalid_data,
+            inputs=[selected_dataset_id_state],
+            outputs=[detection_result, detection_details, cleanup_result],
+        )
+
+        clean_dry_run_btn.click(
+            fn=lambda dataset_id: on_clean_invalid_data(dataset_id, dry_run=True),
+            inputs=[selected_dataset_id_state],
+            outputs=[
+                cleanup_result,
+                corpus_preview_df,
+                stats_display,
+                filter_by_scenario_dropdown,
+            ],
+        )
+
+        clean_confirm_btn.click(
+            fn=lambda dataset_id: on_clean_invalid_data(dataset_id, dry_run=False),
+            inputs=[selected_dataset_id_state],
+            outputs=[
+                cleanup_result,
                 corpus_preview_df,
                 stats_display,
                 filter_by_scenario_dropdown,
